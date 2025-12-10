@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Options - Markdown Reader</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>⚙️ Options - Markdown Reader</h1>
+      <p>Personnalisez l'apparence de vos fichiers Markdown</p>
+    </header>
+
+    <main>
+      <section class="config-section">
+        <h2>Propriétés du texte</h2>
+        
+        <div class="form-group">
+          <label for="font-family">Famille de police :</label>
+          <select id="font-family" class="form-control">
+            <option value="system">Système (par défaut)</option>
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="'Times New Roman', serif">Times New Roman</option>
+            <option value="'Courier New', monospace">Courier New</option>
+            <option value="Verdana, sans-serif">Verdana</option>
+            <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+            <option value="'Lucida Console', monospace">Lucida Console</option>
+            <option value="'Comic Sans MS', cursive">Comic Sans MS</option>
+          </select>
+          <small>Choisissez la police de caractères pour le texte</small>
+        </div>
+
+        <div class="form-group">
+          <label for="font-size">Taille de police :</label>
+          <input type="range" id="font-size" min="12" max="24" value="16" class="form-control">
+          <div class="range-value">
+            <span id="font-size-value">16</span> px
+          </div>
+          <small>Taille de base pour le texte (12-24px)</small>
+        </div>
+
+        <div class="form-group">
+          <label for="line-height">Hauteur de ligne :</label>
+          <input type="range" id="line-height" min="1.2" max="2.5" step="0.1" value="1.6" class="form-control">
+          <div class="range-value">
+            <span id="line-height-value">1.6</span>
+          </div>
+          <small>Espacement entre les lignes (1.2-2.5)</small>
+        </div>
+
+        <div class="form-group">
+          <label for="max-width">Largeur maximale du contenu :</label>
+          <input type="range" id="max-width" min="600" max="1400" step="50" value="900" class="form-control">
+          <div class="range-value">
+            <span id="max-width-value">900</span> px
+          </div>
+          <small>Largeur maximale du contenu (600-1400px)</small>
+        </div>
+      </section>
+
+      <section class="config-section">
+        <h2>Couleurs du texte</h2>
+        
+        <div class="form-group">
+          <label for="text-color">Couleur du texte :</label>
+          <div class="color-input-group">
+            <input type="color" id="text-color" value="#333333" class="form-control color-picker">
+            <input type="text" id="text-color-hex" value="#333333" class="form-control color-hex">
+          </div>
+          <small>Couleur principale du texte</small>
+        </div>
+
+        <div class="form-group">
+          <label for="link-color">Couleur des liens :</label>
+          <div class="color-input-group">
+            <input type="color" id="link-color" value="#0366d6" class="form-control color-picker">
+            <input type="text" id="link-color-hex" value="#0366d6" class="form-control color-hex">
+          </div>
+          <small>Couleur des liens hypertextes</small>
+        </div>
+      </section>
+
+      <section class="config-section">
+        <h2>Apparence</h2>
+        
+        <div class="form-group">
+          <label for="padding">Espacement intérieur :</label>
+          <input type="range" id="padding" min="10" max="80" step="5" value="40" class="form-control">
+          <div class="range-value">
+            <span id="padding-value">40</span> px
+          </div>
+          <small>Espacement autour du contenu (10-80px)</small>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button id="save-btn" class="btn btn-primary">💾 Enregistrer les paramètres</button>
+        <button id="reset-btn" class="btn btn-secondary">↩️ Réinitialiser par défaut</button>
+      </div>
+
+      <div id="message" class="message"></div>
+    </main>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
+
