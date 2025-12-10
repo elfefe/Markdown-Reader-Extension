@@ -176,18 +176,25 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// Fonction pour obtenir le contenu markdown de la page
+// Fonction pour obtenir le contenu markdown de la page (seulement si pas déjà transformé)
 function getMarkdownContent() {
+  // Si la page a déjà été transformée (contient notre conteneur markdown), ne pas récupérer depuis le DOM
+  const markdownContainer = document.querySelector('.markdown-container');
+  if (markdownContainer) {
+    // La page a déjà été transformée, on ne doit pas utiliser getMarkdownContent()
+    return null;
+  }
+  
   // Pour les fichiers file://, le contenu markdown est généralement dans le body ou pre
   // Chrome affiche souvent les fichiers texte dans un <pre> ou directement dans le body
   
   // Vérifier si le contenu est dans un élément <pre>
   const preElement = document.querySelector('pre');
-  if (preElement) {
+  if (preElement && !preElement.closest('.markdown-container')) {
     return preElement.textContent;
   }
   
-  // Si le body contient du contenu textuel brut
+  // Si le body contient du contenu textuel brut (avant transformation)
   if (document.body) {
     // Si le body ne contient qu'un seul enfant de type texte, c'est probablement le markdown
     if (document.body.childNodes.length === 1 && 
@@ -195,38 +202,69 @@ function getMarkdownContent() {
       return document.body.textContent;
     }
     
-    // Sinon, récupérer tout le texte
-    return document.body.textContent || document.body.innerText || '';
+    // Si on a seulement du texte brut sans structure HTML complexe
+    const bodyText = document.body.textContent || document.body.innerText || '';
+    // Vérifier que ce n'est pas déjà du HTML transformé (pas de balises HTML sauf celles de base)
+    if (bodyText && !document.querySelector('.markdown-container') && 
+        !document.querySelector('.theme-toggle-wrapper')) {
+      return bodyText;
+    }
   }
   
-  // Dernier recours
-  return document.documentElement.innerText || document.documentElement.textContent || '';
+  return null;
 }
 
 // Variable globale pour stocker le contenu précédent et l'intervalle de surveillance
 let previousMarkdownContent = '';
 let watchInterval = null;
 let currentUrl = '';
+let fetchWorks = null; // null = pas encore testé, true/false = résultat du test
 
-// Fonction pour obtenir le contenu markdown depuis le fichier
-async function fetchMarkdownContent(url) {
+// Fonction pour obtenir le contenu markdown depuis le fichier (utilise fetch ou XMLHttpRequest)
+async function fetchMarkdownContent(url, useCacheBust = false) {
+  // Ajouter un paramètre de cache-busting si nécessaire
+  const fetchUrl = useCacheBust ? `${url}?t=${Date.now()}` : url;
+  
+  // Essayer fetch() d'abord
   try {
-    const response = await fetch(url, {
-      cache: 'no-cache',
+    const response = await fetch(fetchUrl, {
+      cache: 'no-store',
       headers: {
-        'Cache-Control': 'no-cache'
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       }
     });
+    
     if (response.ok) {
       const content = await response.text();
       return content;
     }
   } catch (error) {
-    // Fetch peut échouer pour les fichiers file:// à cause des restrictions CORS
-    // On retourne null pour utiliser la méthode DOM en fallback
-    console.debug('Fetch failed, using DOM method:', error);
+    // Fetch peut échouer pour les fichiers file://, essayer XMLHttpRequest
   }
-  return null;
+  
+  // Fallback vers XMLHttpRequest (peut fonctionner là où fetch() échoue)
+  try {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', fetchUrl, true);
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 0 || xhr.status === 200) {
+            resolve(xhr.responseText);
+          } else {
+            reject(new Error(`HTTP ${xhr.status}`));
+          }
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network error'));
+      xhr.send();
+    });
+  } catch (error) {
+    // Les deux méthodes ont échoué
+    return null;
+  }
 }
 
 // Fonction principale
@@ -239,14 +277,52 @@ async function renderMarkdown(forceUpdate = false) {
 
   // Obtenir le contenu markdown
   let markdownContent;
+  
   if (url.startsWith('file://')) {
-    // Pour les fichiers locaux, essayer fetch d'abord, puis fallback vers DOM
-    markdownContent = await fetchMarkdownContent(url);
-    if (!markdownContent || markdownContent.trim().length === 0) {
+    // Tester si fetch fonctionne (seulement la première fois)
+    if (fetchWorks === null) {
+      const testContent = await fetchMarkdownContent(url, true);
+      fetchWorks = testContent !== null && testContent.length > 0;
+      
+      if (fetchWorks) {
+        markdownContent = testContent;
+      } else {
+        // Fetch ne fonctionne pas, utiliser la méthode DOM
+        markdownContent = getMarkdownContent();
+      }
+    } else if (fetchWorks) {
+      // Fetch fonctionne, l'utiliser avec cache-busting
+      markdownContent = await fetchMarkdownContent(url, !forceUpdate);
+    } else {
+      // Fetch ne fonctionne pas, on ne peut pas détecter les changements
+      // Pour le premier chargement, utiliser DOM
+      if (forceUpdate) {
+        markdownContent = getMarkdownContent();
+      } else {
+        // Pour les vérifications périodiques, on ne peut pas détecter les changements
+        // sans fetch(), donc on retourne
+        return;
+      }
+    }
+    
+    // Si toujours pas de contenu lors du premier chargement, utiliser DOM
+    if ((!markdownContent || markdownContent.trim().length === 0) && forceUpdate) {
       markdownContent = getMarkdownContent();
+      if (markdownContent) {
+        fetchWorks = false; // Marquer que fetch ne fonctionne pas
+      }
     }
   } else {
-    markdownContent = getMarkdownContent();
+    // Pour les autres URLs (http/https)
+    if (forceUpdate) {
+      markdownContent = getMarkdownContent();
+    } else {
+      // Pour les mises à jour, utiliser fetch avec cache-busting
+      markdownContent = await fetchMarkdownContent(url, true);
+      if (!markdownContent) {
+        return;
+      }
+    }
   }
   
   if (!markdownContent || markdownContent.trim().length === 0) {
@@ -270,16 +346,28 @@ async function renderMarkdown(forceUpdate = false) {
   // Parser le markdown en HTML
   const htmlContent = parseMarkdown(markdownContent);
 
-  // Créer la structure HTML
-  const container = document.createElement('div');
-  container.className = 'markdown-container';
-  container.innerHTML = htmlContent;
-
   // Récupérer le thème sauvegardé
   const savedTheme = localStorage.getItem('markdown-reader-theme') || 'light';
   const isDark = savedTheme === 'dark';
 
-  // Remplacer le contenu de la page
+  // Vérifier si la page a déjà été transformée
+  const existingContainer = document.querySelector('.markdown-container');
+  const existingToggle = document.querySelector('.theme-toggle-wrapper');
+  
+  if (existingContainer) {
+    // La page existe déjà, mettre à jour seulement le contenu du conteneur
+    existingContainer.innerHTML = htmlContent;
+    // Réappliquer les paramètres personnalisés
+    applyCustomSettings();
+    return; // Ne pas recréer toute la structure
+  }
+
+  // Première fois : créer toute la structure
+  const container = document.createElement('div');
+  container.className = 'markdown-container';
+  container.innerHTML = htmlContent;
+
+  // Remplacer le contenu de la page seulement si nécessaire
   document.documentElement.innerHTML = `
     <head>
       <meta charset="UTF-8">
@@ -337,15 +425,18 @@ function startFileWatcher() {
       return;
     }
 
-    // Si l'URL a changé, mettre à jour
+    // Si l'URL a changé, réinitialiser et mettre à jour
     if (url !== currentUrl) {
       previousMarkdownContent = '';
       currentUrl = url;
+      fetchWorks = null; // Réinitialiser le test fetch
       await renderMarkdown(true);
       return;
     }
 
-    // Vérifier les modifications du contenu
+    // Si fetch ne fonctionne pas pour file://, on ne peut pas détecter les changements
+    // dans ce cas, on pourrait utiliser un rechargement périodique, mais c'est une mauvaise UX
+    // Pour l'instant, on essaie quand même renderMarkdown qui retournera rapidement si pas de changement
     try {
       await renderMarkdown(false);
     } catch (error) {
